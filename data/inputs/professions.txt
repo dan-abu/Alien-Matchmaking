@@ -1,0 +1,7 @@
+Entertainer
+Healer
+Warrior
+Farmer
+Spiritual Guide
+Lawmaker
+Engineer
