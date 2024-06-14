@@ -13,7 +13,7 @@ class User:
         self.profession = profession
         self.eye_colour = eye_colour
         self.matches = []
-        self.active_status = False
+        self.active_status = True
         self.prefs = prefs
         self.email = self.name + "@pythonica.com"
 
@@ -25,13 +25,10 @@ class Platform:
         self.matches_counter = 0
         self.simulated_day_count = simulated_day_count
         self.daily_aggregation_table = pd.DataFrame(columns=['day', 'historic_users_total', 'active_users_total', 'new_matches'])
-        self.eod_user_history_table = pd.DataFrame(columns=['day', 'id', 'name', 'gender', 'profession', 'eye_colour', 'matches', 'active_status', 'prefs', 'email'])
+        self.eod_user_history_table = pd.DataFrame(columns=['day', 'name', 'gender', 'profession', 'eye_colour', 'matches', 'active_status', 'prefs', 'email'])
     
     def matchmake(self) -> None:
         """Match users' preferences"""
-        # loops = len(self.users) - 1
-        # count = 0
-        # while count < loops:
         for i in range(len(self.users)):
             if self.users[i].active_status == False: #checking if user is active
                 continue
@@ -43,28 +40,36 @@ class Platform:
                         if self.users[i].gender != self.users[j].gender and self.users[i].name not in self.users[j].matches: #for prototype, it's enough to check one of the users has the other's name in their matches list
                             if ((self.users[i].prefs['Profession'] == self.users[j].profession and self.users[j].prefs['Profession'] == self.users[i].profession)
                                 or (self.users[i].prefs['Eye_colour'] == self.users[j].eye_colour and self.users[j].prefs['Eye_colour'] == self.users[i].eye_colour)):
-                                self.users[i].matches.append(self.users[j])
-                                self.users[j].matches.append(self.users[i])
+                                self.users[i].matches.append(self.users[j].name)
+                                self.users[j].matches.append(self.users[i].name)
                                 print(f'We have a match between {self.users[i].name} and {self.users[j].name}. Their emails are {self.users[i].email} and {self.users[j].email}.')
+                                print(f'{self.users[i].name}\'s matches are: {self.users[i].matches}.')
+                                print(f'{self.users[j].name}\'s matches are: {self.users[j].matches}.')
                                 self.matches_counter += 1
                         else:
                             continue
-                        # count += 1
+        if self.matches_counter == 0:
+            print('No matches today, sadly.')
     
     def daily_aggregation_table_generator(self, folder) -> pd.DataFrame:
         """Generates daily aggregation dataframe to be used by the data warehouse"""
         execution_time = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.daily_aggregation_table['day'] = self.simulated_day_count
-        self.daily_aggregation_table['historic_users_total'] = len(self.users)
+
         active_user_count = 0
         for user in self.users:
             if user.active_status == True:
                 active_user_count += 1
             else:
                 continue
-        self.daily_aggregation_table['active_users_total'] = active_user_count
-        self.daily_aggregation_table['new_matches'] = self.matches_counter
 
+        aggregation_data = {
+            'day': [self.simulated_day_count],
+            'historic_users_total': [len(self.users)],
+            'active_users_total': [active_user_count],
+            'new_matches': [self.matches_counter]
+        }
+
+        self.daily_aggregation_table = pd.DataFrame(aggregation_data)
         filename = 'daily_aggregation_table' + execution_time
         filename = os.path.join(folder, filename)
         self.daily_aggregation_table.to_csv(filename)
@@ -73,16 +78,32 @@ class Platform:
     def eod_user_history_table_generator(self, folder) -> pd.DataFrame:
         """Generates daily end of day position of users"""
         execution_time = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.eod_user_history_table['day'] = self.simulated_day_count
-        for user in self.users:
-            self.eod_user_history_table['name'] = user.name
-            self.eod_user_history_table['gender'] = user.gender
-            self.eod_user_history_table['profession'] = user.profession
-            self.eod_user_history_table['eye_colour'] = user.eye_colour
-            self.eod_user_history_table['matches'] = user.matches
-            self.eod_user_history_table['active_status'] = user.active_status
-            self.eod_user_history_table['prefs'] = user.prefs
-            self.eod_user_history_table['email'] = user.email
+        
+
+        days = [self.simulated_day_count for day in range(len(self.users))]
+        names = [name for name in [user.name for user in self.users]]
+        genders = [gender for gender in [user.gender for user in self.users]]
+        professions = [profession for profession in [user.profession for user in self.users]]
+        eye_colours = [eye_colour for eye_colour in [user.eye_colour for user in self.users]]
+        matches_list = [matches for matches in [user.matches for user in self.users]]
+        active_status_list = [active_status for active_status in [user.active_status for user in self.users]]
+        prefs_list = [prefs for prefs in [user.prefs for user in self.users]]
+        emails = [email for email in [user.email for user in self.users]]
+
+        user_data = {'day': days,
+                'name': names,
+                'gender': genders,
+                'profession': professions,
+                'eye_colour': eye_colours,
+                'matches': matches_list,
+                'active_status': active_status_list,
+                'prefs': prefs_list,
+                'emails': emails}
+        
+        new_table = pd.DataFrame(user_data)
+        self.eod_user_history_table = new_table
+
+        print(self.eod_user_history_table.head())
         
         filename = 'eod_user_history_table' + execution_time
         filename = os.path.join(folder, filename)
@@ -114,7 +135,7 @@ class DataWarehouse:
     
     def update_landing_table(self, raw_table) -> pd.DataFrame:
         """Checking to see if any changes need to be made to the landing table in the data warehosue"""
-        new_table_cols = raw_table.cols[1:]
+        new_table_cols = raw_table.columns[1:]
         new_table = raw_table[new_table_cols]
         if self.landing_table.empty:
             for column in new_table:
@@ -159,7 +180,7 @@ if __name__ == "__main__":
                         gender='Female',
                         prefs={'Profession': random.choice(professions), 'Eye_colour': random.choice(eye_colours)}
                         ))
-    
+        
     ama.matchmake()
     ama.daily_aggregation_table_generator('/Users/dan/Desktop/Daniel/Work/Coding/Muzz/Alien Matchmaking/data/daily_aggregation')
     ama.eod_user_history_table_generator('/Users/dan/Desktop/Daniel/Work/Coding/Muzz/Alien Matchmaking/data/eod_user_history')
